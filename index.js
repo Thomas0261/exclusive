@@ -5,14 +5,13 @@ const nodemailer = require('nodemailer');
 
 const app = express();
 
-// Allowed origins
 const allowedOrigins = [
   'https://thomast43002.wixsite.com',
   'https://thomast43002-wixsite-com.filesusr.com',
   'http://localhost'
 ];
 
-// Middleware
+app.use(express.json());
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -25,105 +24,87 @@ app.use(cors({
   allowedHeaders: ['Content-Type'],
   credentials: true
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
-// Logger
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
-  next();
-});
-
-// Health check
 app.get('/', (req, res) => {
-  res.status(200).json({ status: 'Server is running' });
-});
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.send('Welcome to exclusive rest api.');
 });
 
-// Email sending route
+// Main handler for both reservation and contact
 app.post('/api/send', async (req, res) => {
-  const data = req.body;
-
-  // Validate
-  const isReservation = !!data.firstName;
-  const isContact = !!data.name;
-
-  if (!isReservation && !isContact) {
-    return res.status(400).json({ error: 'Invalid request body' });
-  }
-
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    },
-    tls: { rejectUnauthorized: false }
-  });
-
-  const subject = isReservation
-    ? `New Reservation from ${data.firstName} ${data.lastName}`
-    : `Contact Request from ${data.name}`;
-
-  const html = isReservation
-    ? `
-      <h2>🚗 Reservation Request</h2>
-      <p><strong>Service:</strong> ${data.service}</p>
-      <p><strong>Name:</strong> ${data.firstName} ${data.lastName}</p>
-      <p><strong>Phone:</strong> ${data.phone}</p>
-      ${data.email ? `<p><strong>Email:</strong> ${data.email}</p>` : ''}
-      <p><strong>Date:</strong> ${data.date}</p>
-      <p><strong>Time:</strong> ${data.time}</p>
-      <p><strong>Passengers:</strong> ${data.passengers}</p>
-      <p><strong>Car Seats:</strong> ${data.carSeats}</p>
-      ${data.notes ? `<p><strong>Notes:</strong> ${data.notes}</p>` : ''}
-    `
-    : `
-      <h2>📩 Contact Inquiry</h2>
-      <p><strong>Service:</strong> ${data.service}</p>
-      <p><strong>Name:</strong> ${data.name}</p>
-      <p><strong>Phone:</strong> ${data.phone}</p>
-      <p><strong>Email:</strong> ${data.email}</p>
-      <p><strong>Message:</strong><br>${data.message}</p>
-    `;
+  const body = req.body;
+  let isReservation = false;
+  let emailHtml = '';
+  let subject = '';
+  const now = new Date().toISOString();
 
   try {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      return res.status(500).json({ error: 'Missing email credentials' });
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      },
+      tls: { rejectUnauthorized: false }
+    });
+
+    // 🟢 Handle Reservation
+    if (body.firstName && body.date && body.time && body.service) {
+      isReservation = true;
+
+      subject = `New Reservation - ${body.service} on ${body.date}`;
+      emailHtml = `
+        <h2>🚗 New Reservation Request</h2>
+        <p><strong>Name:</strong> ${body.firstName} ${body.lastName || ''}</p>
+        <p><strong>Phone:</strong> ${body.phone}</p>
+        <p><strong>Email:</strong> ${body.email || 'Not provided'}</p>
+        <p><strong>Service:</strong> ${body.service}</p>
+        <p><strong>Date:</strong> ${body.date} at ${body.time}</p>
+        <p><strong>Passengers:</strong> ${body.passengers || 'N/A'}</p>
+        <p><strong>Car Seats:</strong> ${body.carSeats || 'N/A'}</p>
+        <p><strong>Notes:</strong><br>${body.notes || 'None'}</p>
+      `;
+    }
+
+    // 🟢 Handle Contact
+    else if (body.name && body.message && body.phone) {
+      subject = `📩 Contact Message from ${body.name}`;
+      emailHtml = `
+        <h2>📨 Contact Request</h2>
+        <p><strong>Name:</strong> ${body.name}</p>
+        <p><strong>Phone:</strong> ${body.phone}</p>
+        <p><strong>Email:</strong> ${body.email || 'Not provided'}</p>
+        <p><strong>Service:</strong> ${body.service || 'Not specified'}</p>
+        <p><strong>Message:</strong><br>${body.message}</p>
+        <hr><small>Received at: ${now}</small>
+      `;
+    } else {
+      return res.status(400).json({ error: 'Invalid request format' });
+    }
+
     await transporter.sendMail({
       from: `"Exclusive Town Cars" <${process.env.EMAIL_USER}>`,
       to: process.env.EMAIL_RECIPIENT || process.env.EMAIL_USER,
-      replyTo: data.email || process.env.EMAIL_USER,
       subject,
-      html
+      html: emailHtml,
+      replyTo: body.email
     });
 
-    console.log(`✅ Email sent: ${subject}`);
     res.status(200).json({ success: true, message: 'Email sent' });
-  } catch (error) {
-    console.error('❌ Email error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to send email',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, error: 'Failed to send email' });
   }
 });
 
-// 404 Handler
-app.use((req, res) => {
-  res.status(404).json({ error: 'Endpoint not found' });
-});
-
-// Start server
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
-
-
-
-
 
 
 
