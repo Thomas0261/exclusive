@@ -70,34 +70,60 @@ app.post("/api/send", async (req, res) => {
       `;
 
       confirmationHtml = `
-        <div style="background-color:#f8f8f8;padding:20px;font-family:'Helvetica Neue',Arial,sans-serif;">
-          <div style="max-width:600px;margin:0 auto;background-color:#1b1b1b;border-radius:8px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
-            <div style="background-color:#cae942;padding:20px;text-align:center;">
-              <h1 style="color:#1b1b1b;margin:0;font-size:24px;">RESERVATION CONFIRMED!</h1>
-            </div>
-            
-            <div style="padding:30px;color:#ffffff;">
-              <div style="margin-bottom:25px;background-color:#252525;padding:20px;border-radius:6px;">
-                <h2 style="color:#cae942;margin-top:0;font-size:20px;">Service Details</h2>
-                <p style="margin:8px 0;"><strong>Service:</strong> Hotel ⇔ Airport - Towncar (1-3) - $70</p>
-                <p style="margin:8px 0;"><strong>Name:</strong> Thomas Tilahun</p>
-                <p style="margin:8px 0;"><strong>Phone:</strong> 9164300261</p>
-                <p style="margin:8px 0;"><strong>Pickup:</strong> 2025-06-06 at 03:31</p>
-                <p style="margin:8px 0;"><strong>Passengers:</strong> 1</p>
-              </div>
-              
-              <p style="font-size:16px;line-height:1.6;">Hi Thomas,</p>
-              <p style="font-size:16px;line-height:1.6;">Thank you for choosing <strong style="color:#cae942;">Exclusive Town Cars</strong>. Your reservation has been successfully received.</p>
-              <p style="font-size:16px;line-height:1.6;">We'll contact you shortly to confirm your booking details.</p>
-              
-              <div style="margin:30px 0;text-align:center;">
-                <div style="height:1px;background:linear-gradient(90deg, transparent, #cae942, transparent);"></div>
-              </div>
-              
-              <p style="font-size:12px;color:#999;text-align:center;">Confirmation sent at ${now}</p>
-            </div>
-          </div>
-        </div>
+       <div style="background-color:#f5f5f5;padding:40px 20px;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;background-color:#2a2a2a;border-radius:12px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.12);border:1px solid #3a3a3a;">
+    <!-- Header with Brand Accent -->
+    <div style="background-color:#cae942;padding:25px;text-align:center;">
+      <h1 style="color:#2a2a2a;margin:0;font-size:26px;font-weight:700;letter-spacing:1px;">RESERVATION CONFIRMED</h1>
+    </div>
+    
+    <!-- Service Details Card -->
+    <div style="padding:30px;color:#ffffff;">
+      <div style="background-color:#333333;border-left:4px solid #cae942;padding:20px;border-radius:0 6px 6px 0;margin-bottom:25px;">
+        <h2 style="color:#cae942;margin-top:0;font-size:18px;text-transform:uppercase;">Service Details</h2>
+        <table style="width:100%;border-collapse:separate;border-spacing:0 10px;">
+          <tr>
+            <td style="width:30%;color:#cae942;font-weight:600;vertical-align:top;">Service:</td>
+            <td>Hotel ⇔ Airport - Towncar (1-3) - $70</td>
+          </tr>
+          <tr>
+            <td style="color:#cae942;font-weight:600;">Name:</td>
+            <td>Thomas Tilahun</td>
+          </tr>
+          <tr>
+            <td style="color:#cae942;font-weight:600;">Phone:</td>
+            <td>9164300261</td>
+          </tr>
+          <tr>
+            <td style="color:#cae942;font-weight:600;">Pickup:</td>
+            <td>2025-06-06 at 03:31</td>
+          </tr>
+          <tr>
+            <td style="color:#cae942;font-weight:600;">Passengers:</td>
+            <td>1</td>
+          </tr>
+        </table>
+      </div>
+      
+      <!-- Personalized Message -->
+      <p style="font-size:16px;line-height:1.6;margin-bottom:20px;">Hi Thomas,</p>
+      <p style="font-size:16px;line-height:1.6;margin-bottom:20px;">
+        Thank you for choosing <strong style="color:#cae942;">Exclusive Town Cars</strong>. 
+        Your reservation is now <strong>confirmed</strong>, and we’re preparing your luxury transfer.
+      </p>
+      
+      <!-- Gradient Divider -->
+      <div style="margin:30px 0;text-align:center;">
+        <div style="height:1px;background:linear-gradient(90deg, transparent, #cae942 20%, #cae942 80%, transparent);opacity:0.3;"></div>
+      </div>
+      
+      <!-- Footer -->
+      <p style="font-size:14px;color:#aaaaaa;text-align:center;margin:0;">
+        Confirmation sent at ${now} • <span style="color:#cae942;">Exclusive Town Cars</span>
+      </p>
+    </div>
+  </div>
+</div>
       `;
 
       clientEmail = body.email;
@@ -117,25 +143,43 @@ app.post("/api/send", async (req, res) => {
       `;
 
       confirmationHtml = `
-                <div style="background-color:#f8f8f8;padding:20px;font-family:'Helvetica Neue',Arial,sans-serif;">
-          <div style="max-width:600px;margin:0 auto;background-color:#1b1b1b;border-radius:8px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
-            <div style="background-color:#cae942;padding:20px;text-align:center;">
-              <h1 style="color:#1b1b1b;margin:0;font-size:24px;">MESSAGE RECEIVED</h1>
-            </div>
-            
-            <div style="padding:30px;color:#ffffff;">
-              <p style="font-size:16px;line-height:1.6;">Hi ${body.name},</p>
-              <p style="font-size:16px;line-height:1.6;">Thank you for reaching out to <strong style="color:#cae942;">Exclusive Town Cars</strong>.</p>
-              <p style="font-size:16px;line-height:1.6;">We've received your message and will respond as soon as possible.</p>
-              
-              <div style="margin:30px 0;text-align:center;">
-                <div style="height:1px;background:linear-gradient(90deg, transparent, #cae942, transparent);"></div>
-              </div>
-              
-              <p style="font-size:12px;color:#999;text-align:center;">Confirmation sent at ${now}</p>
-            </div>
-          </div>
-        </div>
+               <div style="background-color:#f5f5f5;padding:40px 20px;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;background-color:#2a2a2a;border-radius:12px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,0.12);border:1px solid #3a3a3a;">
+    <!-- Header with Brand Accent -->
+    <div style="background-color:#cae942;padding:25px;text-align:center;">
+      <h1 style="color:#2a2a2a;margin:0;font-size:26px;font-weight:700;letter-spacing:1px;">MESSAGE RECEIVED</h1>
+    </div>
+    
+    <!-- Content -->
+    <div style="padding:30px;color:#ffffff;">
+      <!-- Personalized Greeting -->
+      <p style="font-size:16px;line-height:1.6;margin-bottom:20px;">Hi ${body.name},</p>
+      
+      <!-- Thank You Message -->
+      <div style="background-color:#333333;border-left:4px solid #cae942;padding:20px;border-radius:0 6px 6px 0;margin-bottom:25px;">
+        <p style="font-size:16px;line-height:1.6;margin:0;">
+          Thank you for contacting <strong style="color:#cae942;">Exclusive Town Cars</strong>. 
+          We’ve received your inquiry and will respond within <strong>24 hours</strong>.
+        </p>
+      </div>
+      
+      <!-- Call-to-Action (Optional) -->
+      <p style="font-size:15px;line-height:1.6;text-align:center;">
+        <a href="tel:+19164300261" style="color:#cae942;text-decoration:none;font-weight:600;">Need immediate assistance? Call us →</a>
+      </p>
+      
+      <!-- Gradient Divider -->
+      <div style="margin:30px 0;text-align:center;">
+        <div style="height:1px;background:linear-gradient(90deg, transparent, #cae942 20%, #cae942 80%, transparent);opacity:0.3;"></div>
+      </div>
+      
+      <!-- Footer -->
+      <p style="font-size:14px;color:#aaaaaa;text-align:center;margin:0;">
+        Confirmation sent at ${now} • <span style="color:#cae942;">Exclusive Town Cars</span>
+      </p>
+    </div>
+  </div>
+</div>
       `;
 
       clientEmail = body.email;
