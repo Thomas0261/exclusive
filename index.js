@@ -1,4 +1,3 @@
-
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -50,6 +49,8 @@ app.post('/api/send', async (req, res) => {
       tls: { rejectUnauthorized: false }
     });
 
+    let clientEmail = null;
+
     // Reservation
     if (body.firstName && body.date && body.time && body.service) {
       subject = `🚗 Reservation - ${body.service} (${body.date})`;
@@ -65,6 +66,7 @@ app.post('/api/send', async (req, res) => {
         <p><strong>Notes:</strong><br>${body.notes || 'None'}</p>
         <hr><small>Received at ${now}</small>
       `;
+      clientEmail = body.email;
     }
 
     // Contact
@@ -79,13 +81,12 @@ app.post('/api/send', async (req, res) => {
         <p><strong>Message:</strong><br>${body.message}</p>
         <hr><small>Received at ${now}</small>
       `;
-    }
-
-    // Invalid format
-    else {
+      clientEmail = body.email;
+    } else {
       return res.status(400).json({ error: 'Invalid request format' });
     }
 
+    // Send to admin
     await transporter.sendMail({
       from: `"Exclusive Town Cars" <${process.env.EMAIL_USER}>`,
       to: process.env.EMAIL_RECIPIENT || process.env.EMAIL_USER,
@@ -93,6 +94,20 @@ app.post('/api/send', async (req, res) => {
       html,
       replyTo: body.email
     });
+
+    // Also send confirmation to client if email is provided
+    if (clientEmail) {
+      await transporter.sendMail({
+        from: `"Exclusive Town Cars" <${process.env.EMAIL_USER}>`,
+        to: clientEmail,
+        subject: "Thank you for contacting Exclusive Town Cars",
+        html: `
+          <h3>Thank you for your request!</h3>
+          <p>We received your ${body.firstName ? 'reservation' : 'inquiry'} and will get back to you shortly.</p>
+          <hr><small>This is a confirmation email for your reference.</small>
+        `
+      });
+    }
 
     res.status(200).json({ success: true, message: 'Email sent' });
 
@@ -109,7 +124,120 @@ app.listen(PORT, () => {
 
 
 
+// working code #111
+
+// require('dotenv').config();
+// const express = require('express');
+// const cors = require('cors');
+// const nodemailer = require('nodemailer');
+
+// const app = express();
+
+// const allowedOrigins = [
+//   'https://thomast43002.wixsite.com',
+//   'https://thomast43002-wixsite-com.filesusr.com',
+//   'http://localhost'
+// ];
+
+// app.use(express.json());
+// app.use(cors({
+//   origin: function (origin, callback) {
+//     if (!origin || allowedOrigins.includes(origin)) {
+//       callback(null, true);
+//     } else {
+//       callback(new Error('Not allowed by CORS'));
+//     }
+//   },
+//   methods: ['GET', 'POST', 'OPTIONS'],
+//   allowedHeaders: ['Content-Type'],
+//   credentials: true
+// }));
+
+// app.get('/', (req, res) => {
+//   res.send('Welcome to exclusive rest api.');
+// });
+
+// app.post('/api/send', async (req, res) => {
+//   const body = req.body;
+//   const now = new Date().toISOString();
+//   let subject = '';
+//   let html = '';
+
+//   try {
+//     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+//       return res.status(500).json({ error: 'Missing email credentials' });
+//     }
+
+//     const transporter = nodemailer.createTransport({
+//       service: 'gmail',
+//       auth: {
+//         user: process.env.EMAIL_USER,
+//         pass: process.env.EMAIL_PASS
+//       },
+//       tls: { rejectUnauthorized: false }
+//     });
+
+//     // Reservation
+//     if (body.firstName && body.date && body.time && body.service) {
+//       subject = `🚗 Reservation - ${body.service} (${body.date})`;
+//       html = `
+//         <h2>🚗 New Reservation</h2>
+//         <p><strong>Name:</strong> ${body.firstName} ${body.lastName || ''}</p>
+//         <p><strong>Phone:</strong> ${body.phone}</p>
+//         <p><strong>Email:</strong> ${body.email || 'Not provided'}</p>
+//         <p><strong>Date & Time:</strong> ${body.date} at ${body.time}</p>
+//         <p><strong>Passengers:</strong> ${body.passengers || 'N/A'}</p>
+//         <p><strong>Car Seats:</strong> ${body.carSeats || 'N/A'}</p>
+//         <p><strong>Service:</strong> ${body.service}</p>
+//         <p><strong>Notes:</strong><br>${body.notes || 'None'}</p>
+//         <hr><small>Received at ${now}</small>
+//       `;
+//     }
+
+//     // Contact
+//     else if (body.name && body.phone && body.email && body.message) {
+//       subject = `📩 Contact Inquiry - ${body.service || 'General'}`;
+//       html = `
+//         <h2>📩 Contact Request</h2>
+//         <p><strong>Name:</strong> ${body.name}</p>
+//         <p><strong>Phone:</strong> ${body.phone}</p>
+//         <p><strong>Email:</strong> ${body.email}</p>
+//         <p><strong>Service:</strong> ${body.service || 'N/A'}</p>
+//         <p><strong>Message:</strong><br>${body.message}</p>
+//         <hr><small>Received at ${now}</small>
+//       `;
+//     }
+
+//     // Invalid format
+//     else {
+//       return res.status(400).json({ error: 'Invalid request format' });
+//     }
+
+//     await transporter.sendMail({
+//       from: `"Exclusive Town Cars" <${process.env.EMAIL_USER}>`,
+//       to: process.env.EMAIL_RECIPIENT || process.env.EMAIL_USER,
+//       subject,
+//       html,
+//       replyTo: body.email
+//     });
+
+//     res.status(200).json({ success: true, message: 'Email sent' });
+
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ success: false, error: 'Failed to send email' });
+//   }
+// });
+
+// const PORT = process.env.PORT || 10000;
+// app.listen(PORT, () => {
+//   console.log(`🚀 Server running on port ${PORT}`);
+// });
+
+
+
 // - working Reservation Submit 
+// color cae942 1b1b1b
 
 // require('dotenv').config();
 // const express = require('express');
