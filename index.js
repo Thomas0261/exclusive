@@ -5,7 +5,7 @@ const nodemailer = require("nodemailer");
 
 const app = express();
 
-// ✅ CORRECT: CORS configuration for Wix + Render
+// CORS configuration
 const allowedOrigins = [
   "https://thomast43002.wixsite.com",
   "https://thomast43002-wixsite-com.filesusr.com"
@@ -13,25 +13,52 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (like Postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
     }
   },
-  methods: ['POST', 'OPTIONS'],
+  methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type'],
   credentials: true
 }));
 
 app.use(express.json());
 
-// ✅ Preflight route explicitly for /api/send
+// Root endpoint for health checks
+app.get("/", (req, res) => {
+  res.status(200).json({
+    status: "Server is running",
+    endpoints: {
+      sendEmail: "POST /api/send",
+      test: "GET /api/test"
+    }
+  });
+});
+
+// Test endpoint
+app.get("/api/test", (req, res) => {
+  res.status(200).json({ 
+    success: true,
+    message: "API is working!",
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Preflight route
 app.options('/api/send', cors());
 
-// ✅ Middleware to validate incoming request data
+// Request validation middleware
 const validateRequest = (req, res, next) => {
   const body = req.body;
+
+  if (!body) {
+    return res.status(400).json({ error: "Request body is required" });
+  }
 
   if (body.firstName) {
     if (!body.service || !body.phone || !body.date || !body.time) {
@@ -48,10 +75,19 @@ const validateRequest = (req, res, next) => {
   next();
 };
 
-// ✅ Main POST endpoint
+// Main email endpoint
 app.post("/api/send", validateRequest, async (req, res) => {
   const data = req.body;
   const isReservation = !!data.firstName;
+
+  // Validate email configuration
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.error("❌ Email configuration missing");
+    return res.status(500).json({
+      success: false,
+      error: "Server configuration error"
+    });
+  }
 
   const transporter = nodemailer.createTransport({
     service: "gmail",
@@ -70,19 +106,19 @@ app.post("/api/send", validateRequest, async (req, res) => {
     ? `
       <h2>🚗 Reservation Request</h2>
       <p><strong>Service:</strong> ${data.service}</p>
-      <p><strong>Client:</strong> ${data.firstName} ${data.lastName}</p>
+      <p><strong>Client:</strong> ${data.firstName} ${data.lastName || ''}</p>
       <p><strong>Phone:</strong> ${data.phone}</p>
       ${data.email ? `<p><strong>Email:</strong> ${data.email}</p>` : ""}
       <p><strong>Pickup:</strong> ${data.date} at ${data.time}</p>
-      <p><strong>Passengers:</strong> ${data.passengers}</p>
-      ${data.carSeats > 0 ? `<p><strong>Car Seats:</strong> ${data.carSeats}</p>` : ""}
+      ${data.passengers ? `<p><strong>Passengers:</strong> ${data.passengers}</p>` : ""}
+      ${data.carSeats ? `<p><strong>Car Seats:</strong> ${data.carSeats}</p>` : ""}
       ${data.notes ? `<p><strong>Notes:</strong><br>${data.notes.replace(/\n/g, "<br>")}</p>` : ""}
     `
     : `
       <h2>📩 Contact Request</h2>
       <p><strong>Name:</strong> ${data.contactName}</p>
       <p><strong>Phone:</strong> ${data.contactPhone}</p>
-      <p><strong>Email:</strong> ${data.contactEmail}</p>
+      ${data.contactEmail ? `<p><strong>Email:</strong> ${data.contactEmail}</p>` : ""}
       <p><strong>Message:</strong><br>${data.contactMessage.replace(/\n/g, "<br>")}</p>
     `;
 
@@ -90,7 +126,7 @@ app.post("/api/send", validateRequest, async (req, res) => {
     await transporter.sendMail({
       from: `"Exclusive Town Cars" <${process.env.EMAIL_USER}>`,
       to: process.env.EMAIL_RECIPIENT || process.env.EMAIL_USER,
-      replyTo: data.email || data.contactEmail,
+      replyTo: data.email || data.contactEmail || process.env.EMAIL_USER,
       subject,
       html
     });
@@ -107,6 +143,18 @@ app.post("/api/send", validateRequest, async (req, res) => {
   }
 });
 
-// ✅ Correct port for Render (use 10000 only for local dev if needed)
+// Handle 404 errors
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    error: "Endpoint not found",
+    availableEndpoints: {
+      root: "GET /",
+      test: "GET /api/test",
+      sendEmail: "POST /api/send"
+    }
+  });
+});
+
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
