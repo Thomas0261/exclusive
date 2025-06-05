@@ -6,18 +6,29 @@ const nodemailer = require("nodemailer");
 const app = express();
 
 // CORS setup for Wix
-const allowedOrigin = "https://thomast43002.wixsite.com";
-app.use(cors({
-  origin: allowedOrigin,
-  methods: ['POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
-  credentials: true
-}));
-
-// Preflight handler
-app.options('/api/send', cors());
-
-app.use(express.json());
+const allowedOrigins = [
+    "https://thomast43002.wixsite.com",
+    "https://thomast43002-wixsite-com.filesusr.com"
+  ];
+  
+  app.use(cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    methods: ['POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type'],
+    credentials: true
+  }));
+  
+  // Preflight OPTIONS route
+  app.options('/api/send', cors());
+  
+  app.use(express.json());
+  
 
 // Middleware to validate request
 const validateRequest = (req, res, next) => {
