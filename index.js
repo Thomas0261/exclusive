@@ -11,6 +11,7 @@ const allowedOrigins = [
   'http://localhost'
 ];
 
+// Middleware
 app.use(express.json());
 app.use(cors({
   origin: function (origin, callback) {
@@ -25,14 +26,14 @@ app.use(cors({
   credentials: true
 }));
 
+// Health check
 app.get('/', (req, res) => {
-  res.send('Welcome to exclusive rest api.');
+  res.send('✅ Exclusive backend is running.');
 });
 
-// Main handler for both reservation and contact
+// Main form handler
 app.post('/api/send', async (req, res) => {
   const body = req.body;
-  let isReservation = false;
   let emailHtml = '';
   let subject = '';
   const now = new Date().toISOString();
@@ -51,13 +52,11 @@ app.post('/api/send', async (req, res) => {
       tls: { rejectUnauthorized: false }
     });
 
-    // 🟢 Handle Reservation
+    // 🟢 Reservation Form
     if (body.firstName && body.date && body.time && body.service) {
-      isReservation = true;
-
       subject = `New Reservation - ${body.service} on ${body.date}`;
       emailHtml = `
-        <h2>🚗 New Reservation Request</h2>
+        <h2>🚗 Reservation Request</h2>
         <p><strong>Name:</strong> ${body.firstName} ${body.lastName || ''}</p>
         <p><strong>Phone:</strong> ${body.phone}</p>
         <p><strong>Email:</strong> ${body.email || 'Not provided'}</p>
@@ -66,22 +65,26 @@ app.post('/api/send', async (req, res) => {
         <p><strong>Passengers:</strong> ${body.passengers || 'N/A'}</p>
         <p><strong>Car Seats:</strong> ${body.carSeats || 'N/A'}</p>
         <p><strong>Notes:</strong><br>${body.notes || 'None'}</p>
+        <hr><small>Received at: ${now}</small>
       `;
     }
 
-    // 🟢 Handle Contact
-    else if (body.name && body.message && body.phone) {
-      subject = `📩 Contact Message from ${body.name}`;
+    // 🟢 Contact Form
+    else if (body.contactName && body.contactPhone && body.contactMessage) {
+      subject = `📩 Contact Message from ${body.contactName}`;
       emailHtml = `
         <h2>📨 Contact Request</h2>
-        <p><strong>Name:</strong> ${body.name}</p>
-        <p><strong>Phone:</strong> ${body.phone}</p>
-        <p><strong>Email:</strong> ${body.email || 'Not provided'}</p>
+        <p><strong>Name:</strong> ${body.contactName}</p>
+        <p><strong>Phone:</strong> ${body.contactPhone}</p>
+        <p><strong>Email:</strong> ${body.contactEmail || 'Not provided'}</p>
         <p><strong>Service:</strong> ${body.service || 'Not specified'}</p>
-        <p><strong>Message:</strong><br>${body.message}</p>
+        <p><strong>Message:</strong><br>${body.contactMessage}</p>
         <hr><small>Received at: ${now}</small>
       `;
-    } else {
+    }
+
+    // ❌ Invalid Request
+    else {
       return res.status(400).json({ error: 'Invalid request format' });
     }
 
@@ -90,17 +93,18 @@ app.post('/api/send', async (req, res) => {
       to: process.env.EMAIL_RECIPIENT || process.env.EMAIL_USER,
       subject,
       html: emailHtml,
-      replyTo: body.email
+      replyTo: body.email || body.contactEmail || process.env.EMAIL_USER
     });
 
     res.status(200).json({ success: true, message: 'Email sent' });
 
   } catch (err) {
-    console.error(err);
+    console.error('Email Error:', err);
     res.status(500).json({ success: false, error: 'Failed to send email' });
   }
 });
 
+// Start server
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
@@ -108,6 +112,8 @@ app.listen(PORT, () => {
 
 
 
+
+// abwqshoumfqovvzw
 // require('dotenv').config();
 // const express = require('express');
 // const cors = require('cors');
