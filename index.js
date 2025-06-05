@@ -6,23 +6,27 @@ const nodemailer = require("nodemailer");
 const app = express();
 
 // Enhanced CORS configuration for production
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      const allowedOrigins = [
-        "https://thomast43002.wixsite.com",
-        "https://thomast43002.wixsite.com/exclusive-town-car",
-      ];
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    methods: ["POST"],
-  })
-);
-
+// app.use(
+//   cors({
+//     origin: function (origin, callback) {
+//       const allowedOrigins = [
+//         "https://thomast43002.wixsite.com",
+//         "https://thomast43002.wixsite.com/exclusive-town-car",
+//       ];
+//       if (!origin || allowedOrigins.includes(origin)) {
+//         callback(null, true);
+//       } else {
+//         callback(new Error("Not allowed by CORS"));
+//       }
+//     },
+//     methods: ["POST"],
+//   })
+// );
+app.use(cors({
+    origin: 'https://thomast43002.wixsite.com',
+    methods: ['POST']
+  }));
+  
 app.use(express.json());
 
 // Input validation middleware
