@@ -70,14 +70,33 @@ app.post("/api/send", async (req, res) => {
       `;
 
       confirmationHtml = `
-        <div style="background-color:#1b1b1b;color:#fff;padding:30px;font-family:sans-serif;">
-          <h2 style="color:#cae942;">Reservation Confirmed</h2>
-          <p>Hi ${body.firstName},</p>
-          <p>Thank you for choosing <strong>Exclusive Town Cars</strong>.</p>
-          <p>We’ve received your reservation for <strong>${body.service}</strong> on <strong>${body.date}</strong> at <strong>${body.time}</strong>.</p>
-          <p>We'll be in touch shortly to confirm the details.</p>
-          <hr style="border-top:1px solid #cae942;">
-          <p style="font-size:12px;">Confirmation sent at ${now}</p>
+        <div style="background-color:#f8f8f8;padding:20px;font-family:'Helvetica Neue',Arial,sans-serif;">
+          <div style="max-width:600px;margin:0 auto;background-color:#1b1b1b;border-radius:8px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+            <div style="background-color:#cae942;padding:20px;text-align:center;">
+              <h1 style="color:#1b1b1b;margin:0;font-size:24px;">RESERVATION CONFIRMED!</h1>
+            </div>
+            
+            <div style="padding:30px;color:#ffffff;">
+              <div style="margin-bottom:25px;background-color:#252525;padding:20px;border-radius:6px;">
+                <h2 style="color:#cae942;margin-top:0;font-size:20px;">Service Details</h2>
+                <p style="margin:8px 0;"><strong>Service:</strong> Hotel ⇔ Airport - Towncar (1-3) - $70</p>
+                <p style="margin:8px 0;"><strong>Name:</strong> Thomas Tilahun</p>
+                <p style="margin:8px 0;"><strong>Phone:</strong> 9164300261</p>
+                <p style="margin:8px 0;"><strong>Pickup:</strong> 2025-06-06 at 03:31</p>
+                <p style="margin:8px 0;"><strong>Passengers:</strong> 1</p>
+              </div>
+              
+              <p style="font-size:16px;line-height:1.6;">Hi Thomas,</p>
+              <p style="font-size:16px;line-height:1.6;">Thank you for choosing <strong style="color:#cae942;">Exclusive Town Cars</strong>. Your reservation has been successfully received.</p>
+              <p style="font-size:16px;line-height:1.6;">We'll contact you shortly to confirm your booking details.</p>
+              
+              <div style="margin:30px 0;text-align:center;">
+                <div style="height:1px;background:linear-gradient(90deg, transparent, #cae942, transparent);"></div>
+              </div>
+              
+              <p style="font-size:12px;color:#999;text-align:center;">Confirmation sent at ${now}</p>
+            </div>
+          </div>
         </div>
       `;
 
@@ -98,13 +117,24 @@ app.post("/api/send", async (req, res) => {
       `;
 
       confirmationHtml = `
-        <div style="background-color:#1b1b1b;color:#fff;padding:30px;font-family:sans-serif;">
-          <h2 style="color:#cae942;">Message Received</h2>
-          <p>Hi ${body.name},</p>
-          <p>Thank you for reaching out to <strong>Exclusive Town Cars</strong>.</p>
-          <p>We’ve received your message and will respond as soon as possible.</p>
-          <hr style="border-top:1px solid #cae942;">
-          <p style="font-size:12px;">Confirmation sent at ${now}</p>
+                <div style="background-color:#f8f8f8;padding:20px;font-family:'Helvetica Neue',Arial,sans-serif;">
+          <div style="max-width:600px;margin:0 auto;background-color:#1b1b1b;border-radius:8px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+            <div style="background-color:#cae942;padding:20px;text-align:center;">
+              <h1 style="color:#1b1b1b;margin:0;font-size:24px;">MESSAGE RECEIVED</h1>
+            </div>
+            
+            <div style="padding:30px;color:#ffffff;">
+              <p style="font-size:16px;line-height:1.6;">Hi ${body.name},</p>
+              <p style="font-size:16px;line-height:1.6;">Thank you for reaching out to <strong style="color:#cae942;">Exclusive Town Cars</strong>.</p>
+              <p style="font-size:16px;line-height:1.6;">We've received your message and will respond as soon as possible.</p>
+              
+              <div style="margin:30px 0;text-align:center;">
+                <div style="height:1px;background:linear-gradient(90deg, transparent, #cae942, transparent);"></div>
+              </div>
+              
+              <p style="font-size:12px;color:#999;text-align:center;">Confirmation sent at ${now}</p>
+            </div>
+          </div>
         </div>
       `;
 
