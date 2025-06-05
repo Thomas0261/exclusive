@@ -5,44 +5,29 @@ const nodemailer = require("nodemailer");
 
 const app = express();
 
-// Enhanced CORS configuration for production
-// app.use(
-//   cors({
-//     origin: function (origin, callback) {
-//       const allowedOrigins = [
-//         "https://thomast43002.wixsite.com",
-//         "https://thomast43002.wixsite.com/exclusive-town-car",
-//       ];
-//       if (!origin || allowedOrigins.includes(origin)) {
-//         callback(null, true);
-//       } else {
-//         callback(new Error("Not allowed by CORS"));
-//       }
-//     },
-//     methods: ["POST"],
-//   })
-// );
+// CORS setup for Wix
+const allowedOrigin = "https://thomast43002.wixsite.com";
 app.use(cors({
-    origin: 'https://thomast43002.wixsite.com',
-    methods: ['POST']
-  }));
-  
+  origin: allowedOrigin,
+  methods: ['POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
+  credentials: true
+}));
+
+// Preflight handler
+app.options('/api/send', cors());
+
 app.use(express.json());
 
-// Input validation middleware
+// Middleware to validate request
 const validateRequest = (req, res, next) => {
-  const { body } = req;
+  const body = req.body;
 
-  // For reservation requests
   if (body.firstName) {
     if (!body.service || !body.phone || !body.date || !body.time) {
-      return res
-        .status(400)
-        .json({ error: "Missing required reservation fields" });
+      return res.status(400).json({ error: "Missing required reservation fields" });
     }
-  }
-  // For contact requests
-  else if (body.contactName) {
+  } else if (body.contactName) {
     if (!body.contactPhone || !body.contactMessage) {
       return res.status(400).json({ error: "Missing required contact fields" });
     }
@@ -53,26 +38,27 @@ const validateRequest = (req, res, next) => {
   next();
 };
 
+// API handler
 app.post("/api/send", validateRequest, async (req, res) => {
   const data = req.body;
+  const isReservation = !!data.firstName;
 
-  // Configure transporter with failover options
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
       user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
+      pass: process.env.EMAIL_PASS
     },
-    tls: {
-      rejectUnauthorized: false, // For local testing
-    },
+    tls: { rejectUnauthorized: false }
   });
 
-  // Enhanced email templates
-  const isReservation = !!data.firstName;
   const emailSubject = isReservation
     ? `New Reservation: ${data.service} (${data.date})`
     : `Contact Request: ${data.service || "General Inquiry"}`;
+
+  const plainText = isReservation
+    ? `New reservation from ${data.firstName} ${data.lastName}, Phone: ${data.phone}, Service: ${data.service}, Pickup: ${data.date} ${data.time}`
+    : `Contact request from ${data.contactName}, Phone: ${data.contactPhone}, Message: ${data.contactMessage}`;
 
   const emailHtml = isReservation
     ? `
@@ -83,19 +69,8 @@ app.post("/api/send", validateRequest, async (req, res) => {
       ${data.email ? `<p><strong>Email:</strong> ${data.email}</p>` : ""}
       <p><strong>Date/Time:</strong> ${data.date} at ${data.time}</p>
       <p><strong>Passengers:</strong> ${data.passengers}</p>
-      ${
-        data.carSeats > 0
-          ? `<p><strong>Car Seats:</strong> ${data.carSeats}</p>`
-          : ""
-      }
-      ${
-        data.notes
-          ? `<p><strong>Notes:</strong><br>${data.notes.replace(
-              /\n/g,
-              "<br>"
-            )}</p>`
-          : ""
-      }
+      ${data.carSeats > 0 ? `<p><strong>Car Seats:</strong> ${data.carSeats}</p>` : ""}
+      ${data.notes ? `<p><strong>Notes:</strong><br>${data.notes.replace(/\n/g, "<br>")}</p>` : ""}
     `
     : `
       <h2>📩 New Contact Request</h2>
@@ -103,10 +78,7 @@ app.post("/api/send", validateRequest, async (req, res) => {
       <p><strong>Phone:</strong> ${data.contactPhone}</p>
       <p><strong>Email:</strong> ${data.contactEmail}</p>
       ${data.service ? `<p><strong>Service:</strong> ${data.service}</p>` : ""}
-      <p><strong>Message:</strong><br>${data.contactMessage.replace(
-        /\n/g,
-        "<br>"
-      )}</p>
+      <p><strong>Message:</strong><br>${data.contactMessage.replace(/\n/g, "<br>")}</p>
     `;
 
   try {
@@ -115,30 +87,21 @@ app.post("/api/send", validateRequest, async (req, res) => {
       to: process.env.EMAIL_RECIPIENT || process.env.EMAIL_USER,
       replyTo: data.email || data.contactEmail,
       subject: emailSubject,
-      text: message, // Keep plain text version
-      html: emailHtml, // Add HTML version
+      text: plainText,
+      html: emailHtml
     });
 
-    // Add database logging here if needed
-    console.log(
-      `Email sent for ${isReservation ? "reservation" : "contact"} request`
-    );
-
-    res.status(200).json({
-      success: true,
-      message: "Your request has been submitted successfully!",
-    });
+    console.log(`✅ Email sent: ${emailSubject}`);
+    res.status(200).json({ success: true, message: "Your request has been submitted successfully!" });
   } catch (err) {
-    console.error("Email error:", err);
-
-    // More detailed error response
+    console.error("❌ Email error:", err);
     res.status(500).json({
       success: false,
       error: "Failed to process your request",
-      details: process.env.NODE_ENV === "development" ? err.message : null,
+      details: process.env.NODE_ENV === "development" ? err.message : undefined
     });
   }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
