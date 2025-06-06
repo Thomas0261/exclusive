@@ -2,8 +2,11 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const nodemailer = require("nodemailer");
+const twilio = require("twilio");
 
 const app = express();
+
+const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
 const allowedOrigins = [
   "https://thomast43002.wixsite.com",
@@ -40,10 +43,6 @@ app.post("/api/send", async (req, res) => {
   let clientEmail = null;
 
   try {
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      return res.status(500).json({ error: "Missing email credentials" });
-    }
-
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -88,6 +87,15 @@ app.post("/api/send", async (req, res) => {
   </div>
 </div>`;
       clientEmail = body.email;
+
+      // ✅ Send SMS confirmation
+      if (body.phone) {
+        await twilioClient.messages.create({
+          from: process.env.TWILIO_PHONE_NUMBER,
+          to: body.phone,
+          body: `✅ Exclusive Town Car Booking Confirmed for ${body.service} on ${body.date} at ${body.time}. Thank you!`
+        });
+      }
     } else if (body.name && body.phone && body.email && body.message) {
       subject = `📩 Contact Inquiry - ${body.service || "General"}`;
       html = `
@@ -135,10 +143,10 @@ app.post("/api/send", async (req, res) => {
       });
     }
 
-    res.status(200).json({ success: true, message: "Email sent" });
+    res.status(200).json({ success: true, message: "Email and SMS sent" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ success: false, error: "Failed to send email" });
+    res.status(500).json({ success: false, error: "Failed to send notification" });
   }
 });
 
@@ -146,6 +154,164 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
+
+
+// require("dotenv").config();
+// const express = require("express");
+// const cors = require("cors");
+// const nodemailer = require("nodemailer");
+
+// // Twilio
+// const twilio = require('twilio');
+// const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+
+
+// const app = express();
+
+// const allowedOrigins = [
+//   "https://thomast43002.wixsite.com",
+//   "https://thomast43002-wixsite-com.filesusr.com",
+//   "http://localhost",
+// ];
+
+// app.use(express.json());
+// app.use(
+//   cors({
+//     origin: function (origin, callback) {
+//       if (!origin || allowedOrigins.includes(origin)) {
+//         callback(null, true);
+//       } else {
+//         callback(new Error("Not allowed by CORS"));
+//       }
+//     },
+//     methods: ["GET", "POST", "OPTIONS"],
+//     allowedHeaders: ["Content-Type"],
+//     credentials: true,
+//   })
+// );
+
+// app.get("/", (req, res) => {
+//   res.send("Welcome to exclusive rest api.");
+// });
+
+// app.post("/api/send", async (req, res) => {
+//   const body = req.body;
+//   const now = new Date().toISOString();
+//   let subject = "";
+//   let html = "";
+//   let confirmationHtml = "";
+//   let clientEmail = null;
+
+//   try {
+//     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+//       return res.status(500).json({ error: "Missing email credentials" });
+//     }
+
+//     const transporter = nodemailer.createTransport({
+//       service: "gmail",
+//       auth: {
+//         user: process.env.EMAIL_USER,
+//         pass: process.env.EMAIL_PASS,
+//       },
+//       tls: { rejectUnauthorized: false },
+//     });
+
+//     if (body.firstName && body.date && body.time && body.service) {
+//       subject = `🚗 Reservation - ${body.service} (${body.date})`;
+//       html = `
+//         <h2>🚗 New Reservation</h2>
+//         <p><strong>Name:</strong> ${body.firstName} ${body.lastName || ""}</p>
+//         <p><strong>Phone:</strong> ${body.phone}</p>
+//         <p><strong>Email:</strong> ${body.email || "Not provided"}</p>
+//         <p><strong>Date & Time:</strong> ${body.date} at ${body.time}</p>
+//         <p><strong>Passengers:</strong> ${body.passengers || "N/A"}</p>
+//         <p><strong>Car Seats:</strong> ${body.carSeats || "N/A"}</p>
+//         <p><strong>Service:</strong> ${body.service}</p>
+//         <p><strong>Notes:</strong><br>${body.notes || "None"}</p>
+//         <hr><small>Received at ${now}</small>
+//       `;
+
+//       confirmationHtml = `<div style="background:#f5f5f5;padding:40px;font-family:Arial;">
+//   <div style="max-width:600px;margin:0 auto;background:#1b1b1b;color:#fff;border-radius:10px;overflow:hidden;">
+//     <div style="background:#cae942;padding:20px;text-align:center;">
+//       <h2 style="margin:0;color:#1b1b1b;">Reservation Confirmed</h2>
+//     </div>
+//     <div style="padding:30px;">
+//       <p>Hi ${body.firstName},</p>
+//       <p>Thank you for booking with <strong style="color:#cae942;">Exclusive Town Car Service</strong>.</p>
+//       <p>We’ve received your reservation and will be in touch shortly.</p>
+//       <hr style="border:0;border-top:1px solid #444;">
+//       <p><strong>Service:</strong> ${body.service}</p>
+//       <p><strong>Date:</strong> ${body.date}</p>
+//       <p><strong>Time:</strong> ${body.time}</p>
+//       <p><strong>Passengers:</strong> ${body.passengers || "N/A"}</p>
+//       <p><strong>Phone:</strong> ${body.phone}</p>
+//       <p style="margin-top:30px;font-size:12px;color:#bbb;">Sent at ${now}</p>
+//     </div>
+//   </div>
+// </div>`;
+//       clientEmail = body.email;
+//     } else if (body.name && body.phone && body.email && body.message) {
+//       subject = `📩 Contact Inquiry - ${body.service || "General"}`;
+//       html = `
+//         <h2>📩 Contact Request</h2>
+//         <p><strong>Name:</strong> ${body.name}</p>
+//         <p><strong>Phone:</strong> ${body.phone}</p>
+//         <p><strong>Email:</strong> ${body.email}</p>
+//         <p><strong>Service:</strong> ${body.service || "N/A"}</p>
+//         <p><strong>Message:</strong><br>${body.message}</p>
+//         <hr><small>Received at ${now}</small>
+//       `;
+
+//       confirmationHtml = `<div style="background:#f5f5f5;padding:40px;font-family:Arial;">
+//   <div style="max-width:600px;margin:0 auto;background:#1b1b1b;color:#fff;border-radius:10px;overflow:hidden;">
+//     <div style="background:#cae942;padding:20px;text-align:center;">
+//       <h2 style="margin:0;color:#1b1b1b;">Message Received</h2>
+//     </div>
+//     <div style="padding:30px;">
+//       <p>Hi ${body.name},</p>
+//       <p>Thank you for contacting <strong style="color:#cae942;">Exclusive Town Car Service</strong>.</p>
+//       <p>We’ve received your inquiry and will respond within 24 hours.</p>
+//       <p style="margin-top:30px;font-size:12px;color:#bbb;">Sent at ${now}</p>
+//     </div>
+//   </div>
+// </div>`;
+//       clientEmail = body.email;
+//     } else {
+//       return res.status(400).json({ error: "Invalid request format" });
+//     }
+
+//     await transporter.sendMail({
+//       from: `"Exclusive Town Cars" <${process.env.EMAIL_USER}>`,
+//       to: process.env.EMAIL_RECIPIENT || process.env.EMAIL_USER,
+//       subject,
+//       html,
+//       replyTo: clientEmail,
+//     });
+
+//     if (clientEmail) {
+//       await transporter.sendMail({
+//         from: `"Exclusive Town Cars" <${process.env.EMAIL_USER}>`,
+//         to: clientEmail,
+//         subject: "✅ We've received your request",
+//         html: confirmationHtml,
+//       });
+//     }
+
+//     res.status(200).json({ success: true, message: "Email sent" });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ success: false, error: "Failed to send email" });
+//   }
+// });
+
+// const PORT = process.env.PORT || 10000;
+// app.listen(PORT, () => {
+//   console.log(`🚀 Server running on port ${PORT}`);
+// });
+
+
+// last
 
 
 // require("dotenv").config();
