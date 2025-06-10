@@ -8,7 +8,7 @@ const app = express();
 const allowedOrigins = [
   "https://thomast43002.wixsite.com",
   "https://thomast43002-wixsite-com.filesusr.com",
-  "http://localhost"
+  "http://localhost",
 ];
 
 app.use(express.json());
@@ -42,15 +42,14 @@ app.post("/api/send", async (req, res) => {
     time,
     passengers,
     carSeats,
-    service
+    service,
   } = req.body;
 
   if (!firstName || !phone || !date || !time || !service) {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  const messageBody = 
-  `🚗 *New Reservation Alert*
+  const messageBody = `🚗 *New Reservation Alert*
 ──────────────────────────
 🚘 Service: ${service}
 👤 Name: ${firstName} ${lastName || ""}
@@ -58,14 +57,15 @@ app.post("/api/send", async (req, res) => {
 📅 Date: ${date}
 ⏰ Time: ${time}
 👥 Passengers: ${passengers || "N/A"}
-🪑 Car Seats: ${carSeats || "N/A"}`;
+🪑 Car Seats: ${carSeats || 0} ($${carSeats * 15 || 0} additional)
+`;
 
-  const confirmationMessage = 
-  `✅ Hi ${firstName},
+const confirmationMessage = `✅ Hi ${firstName},
 
 Your reservation for *${service}* on ${date} at ${time} is confirmed.
+${carSeats > 0 ? `\nCar Seats: ${carSeats} ($${carSeats * 15} additional)` : ""}
 
-A team member will contact you shortly to finalize the details.
+We'll contact you shortly to finalize the details.
 
 – Exclusive Town Car Services`;
 
@@ -79,18 +79,19 @@ A team member will contact you shortly to finalize the details.
     await client.messages.create({
       body: messageBody,
       from: process.env.TWILIO_PHONE_NUMBER,
-      to: process.env.ADMIN_PHONE
+      to: process.env.ADMIN_PHONE,
     });
 
     // Send Confirmation SMS to Client
     await client.messages.create({
       body: confirmationMessage,
       from: process.env.TWILIO_PHONE_NUMBER,
-      to: phone
+      to: phone,
     });
 
-    res.status(200).json({ success: true, message: "SMS sent to admin and client" });
-
+    res
+      .status(200)
+      .json({ success: true, message: "SMS sent to admin and client" });
   } catch (err) {
     console.error("❌ Twilio error:", err.message);
     res.status(500).json({ success: false, error: "Failed to send SMS" });
@@ -105,8 +106,7 @@ app.post("/api/contact", async (req, res) => {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  const contactMessage = 
-  `📨 *New Contact Inquiry*
+  const contactMessage = `📨 *New Contact Inquiry*
 ──────────────────────────
 🧑 Name: ${name}
 📞 Phone: ${phone || "N/A"}
@@ -123,14 +123,15 @@ app.post("/api/contact", async (req, res) => {
     await client.messages.create({
       body: contactMessage,
       from: process.env.TWILIO_PHONE_NUMBER,
-      to: process.env.ADMIN_PHONE
+      to: process.env.ADMIN_PHONE,
     });
 
     res.status(200).json({ success: true, message: "Contact message sent" });
-
   } catch (err) {
     console.error("❌ Twilio error (contact):", err.message);
-    res.status(500).json({ success: false, error: "Failed to send contact message" });
+    res
+      .status(500)
+      .json({ success: false, error: "Failed to send contact message" });
   }
 });
 
@@ -139,9 +140,7 @@ app.listen(PORT, () => {
   console.log(`🚀 SMS backend running on port ${PORT}`);
 });
 
-
-
-//===================== Working in "Book Now" only 
+//===================== Working in "Book Now" only
 
 // require("dotenv").config();
 // const express = require("express");
@@ -194,7 +193,7 @@ app.listen(PORT, () => {
 //     return res.status(400).json({ error: "Missing required fields" });
 //   }
 
-//   const messageBody = 
+//   const messageBody =
 //   `🚗 *New Reservation Alert*
 // ──────────────────────────
 // 🚘 Service: ${service}
@@ -205,7 +204,7 @@ app.listen(PORT, () => {
 // 👥 Passengers: ${passengers || "N/A"}
 // 🪑 Car Seats: ${carSeats || "N/A"}`;
 
-// const confirmationMessage = 
+// const confirmationMessage =
 // `✅ Hi ${firstName},
 
 // Your reservation for *${service}* on ${date} at ${time} is confirmed.
@@ -213,7 +212,6 @@ app.listen(PORT, () => {
 // A team member will contact you shortly to finalize the details.
 
 // – Exclusive Town Car Services`;
-
 
 //   try {
 //     const client = twilio(
