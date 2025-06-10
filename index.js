@@ -1,5 +1,3 @@
-// New code with Vonage
-
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
@@ -51,15 +49,22 @@ app.post("/api/send", async (req, res) => {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  const messageBody = `🚗 New Reservation:
-Service: ${service}
-Name: ${firstName} ${lastName || ""}
-Phone: ${phone}
-Date: ${date} at ${time}
-Passengers: ${passengers || "N/A"}
-Car Seats: ${carSeats || "N/A"}`;
+  const messageBody = 
+  `🚗 *New Reservation Alert*
+──────────────────────────
+🔧 Service: ${service}
+👤 Name: ${firstName} ${lastName || ""}
+📞 Phone: ${phone}
+📅 Date: ${date}
+⏰ Time: ${time}
+👥 Passengers: ${passengers || "N/A"}
+🪑 Car Seats: ${carSeats || "N/A"}`;
 
-  const confirmationMessage = `Hi ${firstName}, your reservation for "${service}" on ${date} at ${time} is confirmed. We'll contact you shortly. – Exclusive Town Cars`;
+  const confirmationMessage = 
+  `Hi ${firstName}, your reservation for *${service}* on ${date} at ${time} is confirmed. ✅
+We'll contact you shortly to finalize the details.
+
+– Exclusive Town Cars`;
 
   try {
     const client = twilio(
@@ -93,5 +98,3 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`🚀 SMS backend running on port ${PORT}`);
 });
-
-
