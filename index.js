@@ -52,7 +52,7 @@ app.post("/api/send", async (req, res) => {
   const messageBody = 
   `🚗 *New Reservation Alert*
 ──────────────────────────
-🔧 Service: ${service}
+🚘 Service: ${service}
 👤 Name: ${firstName} ${lastName || ""}
 📞 Phone: ${phone}
 📅 Date: ${date}
@@ -60,11 +60,15 @@ app.post("/api/send", async (req, res) => {
 👥 Passengers: ${passengers || "N/A"}
 🪑 Car Seats: ${carSeats || "N/A"}`;
 
-  const confirmationMessage = 
-  `Hi ${firstName}, your reservation for *${service}* on ${date} at ${time} is confirmed. ✅
-We'll contact you shortly to finalize the details.
+const confirmationMessage = 
+`✅ Hi ${firstName},
 
-– Exclusive Town Cars`;
+Your reservation for *${service}* on ${date} at ${time} is confirmed.
+
+A team member will contact you shortly to finalize the details.
+
+– Exclusive Town Car Services`;
+
 
   try {
     const client = twilio(
