@@ -49,6 +49,7 @@ app.post("/api/send", async (req, res) => {
     passengers,
     carSeats,
     service,
+    notes,
   } = req.body;
 
   if (!firstName || !phone || !date || !time || !service) {
@@ -69,7 +70,9 @@ app.post("/api/send", async (req, res) => {
 ⏰ Time: ${time}
 👥 Passengers: ${passengers || "N/A"}
 🪑 Car Seats: ${carSeats || 0} ($${carSeats * 15 || 0} additional)
+📝 Notes: ${notes || "N/A"}
 `;
+
 
   const confirmationMessage = `✅ Hi ${firstName},
 
