@@ -6,14 +6,14 @@ const twilio = require("twilio");
 const app = express();
 
 const allowedOrigins = [
-  "https://www.exclusivetowncarservice.com",      // ✅ your real domain
-  "https://thomast43002.wixsite.com",             // your Wix site editor
-  "https://thomast43002-wixsite-com.filesusr.com",// your site's media files
-  "https://editor.wix.com",                       // Wix preview
-  "https://manage.wix.com",                       // Wix admin
-  "http://localhost",                             // dev mode
+  "https://www.exclusivetowncarservice.com",
+  "https://thomast43002.wixsite.com",
+  "https://thomast43002-wixsite-com.filesusr.com",
+  "https://www-exclusivetowncarservice-com.filesusr.com", // ✅ this is what triggered the error
+  "https://editor.wix.com",
+  "https://manage.wix.com",
+  "http://localhost"
 ];
-
 app.use(express.json());
 
 app.use(
