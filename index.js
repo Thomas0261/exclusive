@@ -9,11 +9,12 @@ const allowedOrigins = [
   "https://www.exclusivetowncarservice.com",
   "https://thomast43002.wixsite.com",
   "https://thomast43002-wixsite-com.filesusr.com",
-  "https://www-exclusivetowncarservice-com.filesusr.com", // ✅ this is what triggered the error
+  "https://www-exclusivetowncarservice-com.filesusr.com",
   "https://editor.wix.com",
   "https://manage.wix.com",
   "http://localhost"
 ];
+
 app.use(express.json());
 
 app.use(
@@ -32,16 +33,13 @@ app.use(
   })
 );
 
-
-// Check API
+// API Health Check
 app.get("/", (req, res) => {
   res.send("🚗 SMS API is live");
 });
 
 // Reservation Handler
 app.post("/api/send", async (req, res) => {
-  console.log("Body received from Wix form:", req.body); // ✅ Debug input
-
   const {
     firstName,
     lastName,
@@ -57,7 +55,6 @@ app.post("/api/send", async (req, res) => {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  // ✅ Format phone number to E.164
   let formattedPhone = phone;
   if (!phone.startsWith('+')) {
     formattedPhone = '+1' + phone.replace(/\D/g, '');
@@ -89,14 +86,19 @@ We'll contact you shortly to finalize the details.
       process.env.TWILIO_AUTH_TOKEN
     );
 
-    // Admin SMS
-    await client.messages.create({
-      body: messageBody,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: process.env.ADMIN_PHONE,
-    });
+    // Send to multiple admins
+    const adminPhones = process.env.ADMIN_PHONES.split(',');
+    await Promise.all(
+      adminPhones.map(adminPhone =>
+        client.messages.create({
+          body: messageBody,
+          from: process.env.TWILIO_PHONE_NUMBER,
+          to: adminPhone.trim(),
+        })
+      )
+    );
 
-    // Client SMS
+    // Send confirmation to customer
     await client.messages.create({
       body: confirmationMessage,
       from: process.env.TWILIO_PHONE_NUMBER,
@@ -133,13 +135,19 @@ app.post("/api/contact", async (req, res) => {
       process.env.TWILIO_AUTH_TOKEN
     );
 
-    await client.messages.create({
-      body: contactMessage,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: process.env.ADMIN_PHONE,
-    });
+    const adminPhones = process.env.ADMIN_PHONES.split(',');
+    await Promise.all(
+      adminPhones.map(adminPhone =>
+        client.messages.create({
+          body: contactMessage,
+          from: process.env.TWILIO_PHONE_NUMBER,
+          to: adminPhone.trim(),
+        })
+      )
+    );
 
     res.status(200).json({ success: true, message: "Contact message sent" });
+
   } catch (err) {
     console.error("❌ Twilio error (contact):", err.message);
     res.status(500).json({ success: false, error: "Failed to send contact message" });
