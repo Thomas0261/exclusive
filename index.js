@@ -3,206 +3,253 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const twilio = require("twilio");
+const crypto = require("crypto");
 
 const app = express();
 app.use(express.json());
 
 /* =========================
-   Tenant config + templates
-   ========================= */
-const TENANTS = {
-  exclusive: {
-    brandName: "Exclusive Town Car Services",
-    hostnames: new Set([
-      "www.exclusivetowncarservice.com",
-      "exclusivetowncarservice.com",
-    ]),
-    refererIncludes: [], // Exclusive preview uses default routing
-    // Back-compat: will read any of these env keys (first one found)
-    envAdminKeys: ["ADMIN_PHONES_EXCLUSIVE", "ADMIN_PHONES", "ADMIN_PHONE"],
-    // Professional, sleek
-    tplDriver: (p) =>
-`━━━━━━━━━━━━━━━━━━
-🚘 RESERVATION ALERT
-━━━━━━━━━━━━━━━━━━
-Service: ${p.service}
-Name: ${p.firstName} ${p.lastName || ""}
-Phone: ${p.phone}
-Date: ${p.date}   Time: ${p.time}
-Passengers: ${p.passengers || "N/A"}
-Car Seats: ${p.carSeats || 0} ($${p.csCost || 0})
-Notes: ${p.notes || "N/A"}
-━━━━━━━━━━━━━━━━━━
-${p.brand}
-`,
-    tplCustomer: (p) =>
-`✅ Dear ${p.firstName},
-
-Your reservation for "${p.service}" is confirmed:
-📅 ${p.date} at ${p.time}
-${p.carSeats > 0 ? `Car Seats: ${p.carSeats} ($${p.csCost})\n` : ""}We will contact you shortly for final details.
-
-Thank you for choosing ${p.brand}.
-Reply STOP to opt out.`,
-  },
-
-  allSeasons: {
-    brandName: "All Seasons Town Car Services",
-    hostnames: new Set([
-      "www.allseasontowncarservice.com",
-      "allseasontowncarservice.com",
-    ]),
-    // Your Wix test site path cue:
-    // https://thomast43002.wixsite.com/website-4
-    refererIncludes: ["/website-4"],
-    envAdminKeys: ["ADMIN_PHONES_ALLSEASONS"],
-    // Friendly & service-focused
-    tplDriver: (p) =>
-`🚗 New Ride Request!
-────────────────────
-Service: ${p.service}
-Client: ${p.firstName} ${p.lastName || ""}
-Phone: ${p.phone}
-When: ${p.date} @ ${p.time}
-Pax: ${p.passengers || "N/A"} | Car Seats: ${p.carSeats || 0}
-Notes: ${p.notes || "N/A"}
-────────────────────
-${p.brand} Dispatch
-`,
-    tplCustomer: (p) =>
-`Hi ${p.firstName}, 👋
-
-Your ${p.service} booking for ${p.date} at ${p.time} is confirmed.
-${p.carSeats > 0 ? `Car Seats: ${p.carSeats} ($${p.csCost})\n` : ""}We look forward to serving you!
-
-– ${p.brand}
-Reply STOP to opt out.`,
-  },
-};
-
-/* =========
    Helpers
-   ========= */
+   ========================= */
 const getHostname = (urlish) => {
-  try {
-    if (!urlish) return null;
-    return new URL(urlish).hostname;
-  } catch {
-    return null;
-  }
+  try { return urlish ? new URL(urlish).hostname : null; } catch { return null; }
 };
-
 const normalizePhones = (csv) =>
   String(csv || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-
 const phonesFromFirstEnv = (keys) => {
-  for (const k of keys) {
-    if (process.env[k]) return normalizePhones(process.env[k]);
-  }
+  for (const k of keys) if (process.env[k]) return normalizePhones(process.env[k]);
   return [];
 };
-
-const formatUSPhone = (raw) => {
-  if (!raw) return "";
-  return raw.startsWith("+") ? raw : "+1" + String(raw).replace(/\D/g, "");
+const formatUSPhone = (raw) => (raw?.startsWith("+") ? raw : "+1" + String(raw || "").replace(/\D/g, ""));
+const stablePick = (variants, keyString) => {
+  if (!Array.isArray(variants) || variants.length === 0) return null;
+  if (variants.length === 1) return variants[0];
+  const h = crypto.createHash("md5").update(keyString || String(Math.random())).digest();
+  const n = h[0]; // 0..255
+  return variants[n % variants.length];
 };
 
+/* =========================
+   Template Packs per tenant
+   =========================
+   NOTE: keep subtle brand differences in separators, label casing, tone and order.
+   SMS is plain text only (no HTML/CSS). We use unicode lines, bullets, spacing.
+*/
+const TENANTS = {
+  exclusive: {
+    brandName: "Exclusive Town Car Services",
+    hostnames: new Set(["www.exclusivetowncarservice.com","exclusivetowncarservice.com"]),
+    refererIncludes: [],
+    envAdminKeys: ["ADMIN_PHONES_EXCLUSIVE","ADMIN_PHONES","ADMIN_PHONE"],
+
+    // DRIVER variants (formal/premium)
+    driverTpls: [
+      (p) =>
+`━━━━━━━━━━━━━━━━
+RESERVATION ALERT
+━━━━━━━━━━━━━━━━
+Service     : ${p.service}
+Passenger   : ${p.firstName} ${p.lastName || ""}
+Phone       : ${p.phone}
+Pickup      : ${p.date} ${p.time}
+Passengers  : ${p.passengers || "N/A"}
+Car Seats   : ${p.carSeats || 0}${p.csCost ? ` ($${p.csCost})` : ""}
+Notes       : ${p.notes || "N/A"}
+━━━━━━━━━━━━━━━━
+${p.brand}`,
+      (p) =>
+`— RESERVATION —
+Service : ${p.service}
+Name    : ${p.firstName} ${p.lastName || ""}
+Phone   : ${p.phone}
+When    : ${p.date} ${p.time}
+Pax     : ${p.passengers || "N/A"}   Seats: ${p.carSeats || 0}${p.csCost ? ` ($${p.csCost})` : ""}
+Notes   : ${p.notes || "N/A"}
+— ${p.brand} —`
+    ],
+
+    // CUSTOMER variants (formal, no emoji)
+    customerTpls: [
+      (p) =>
+`Dear ${p.firstName},
+
+Your "${p.service}" reservation is confirmed.
+• Date/Time: ${p.date} at ${p.time}
+${p.carSeats > 0 ? `• Car Seats: ${p.carSeats} ($${p.csCost})\n` : ""}We will follow up shortly with final details.
+
+Thank you for choosing ${p.brand}.
+Reply STOP to opt out.`,
+      (p) =>
+`${p.firstName}, your reservation is confirmed.
+
+Service: ${p.service}
+Date/Time: ${p.date} at ${p.time}
+${p.carSeats > 0 ? `Car Seats: ${p.carSeats} ($${p.csCost})\n` : ""}We will be in touch if any additional information is needed.
+
+— ${p.brand}
+Reply STOP to opt out.`
+    ],
+
+    // CONTACT single (clean)
+    contactTpl: (c) =>
+`CONTACT INQUIRY
+Name    : ${c.name}
+Phone   : ${c.phone || "N/A"}
+Email   : ${c.email}
+Service : ${c.service || "General"}
+Message : ${c.message}
+[${c.brand}]`,
+  },
+
+  allSeasons: {
+    brandName: "All Seasons Town Car Services",
+    hostnames: new Set(["www.allseasontowncarservice.com","allseasontowncarservice.com"]),
+    // Wix preview: https://thomast43002.wixsite.com/website-4
+    refererIncludes: ["/website-4"],
+    // fallback to same list if you want one pool
+    envAdminKeys: ["ADMIN_PHONES_ALLSEASONS","ADMIN_PHONES","ADMIN_PHONE"],
+
+    // DRIVER variants (friendly/efficient)
+    driverTpls: [
+      (p) =>
+`🚗 New Ride
+────────────────
+${p.service}
+Client   : ${p.firstName} ${p.lastName || ""}
+Phone    : ${p.phone}
+When     : ${p.date} @ ${p.time}
+Pax/Seat : ${p.passengers || "N/A"} / ${p.carSeats || 0}${p.csCost ? ` ($${p.csCost})` : ""}
+Notes    : ${p.notes || "N/A"}
+────────────────
+${p.brand} Dispatch`,
+      (p) =>
+`Ride Request
+Service : ${p.service}
+Name    : ${p.firstName} ${p.lastName || ""}
+Phone   : ${p.phone}
+Time    : ${p.date} @ ${p.time}
+Pax     : ${p.passengers || "N/A"}, Seats: ${p.carSeats || 0}${p.csCost ? ` ($${p.csCost})` : ""}
+Notes   : ${p.notes || "N/A"}
+${p.brand}`
+    ],
+
+    // CUSTOMER variants (warm tone with subtle emoji)
+    customerTpls: [
+      (p) =>
+`Hi ${p.firstName}! 👋
+
+Your ${p.service} on ${p.date} at ${p.time} is confirmed.
+${p.carSeats > 0 ? `Car Seats: ${p.carSeats} ($${p.csCost})\n` : ""}We’re excited to drive you soon.
+
+– ${p.brand}
+Reply STOP to opt out.`,
+      (p) =>
+`Booking confirmed, ${p.firstName}! ✅
+
+• Service: ${p.service}
+• When: ${p.date} at ${p.time}
+${p.carSeats > 0 ? `• Car Seats: ${p.carSeats} ($${p.csCost})\n` : ""}Thanks for choosing ${p.brand}. See you soon!
+Reply STOP to opt out.`
+    ],
+
+    // CONTACT single (friendly)
+    contactTpl: (c) =>
+`📨 New Inquiry
+Name   : ${c.name}
+Phone  : ${c.phone || "N/A"}
+Email  : ${c.email}
+Topic  : ${c.service || "General"}
+Message: ${c.message}
+[${c.brand}]`,
+  },
+};
+
+/* =========================
+   Tenant resolver (with Wix preview override)
+   ========================= */
 const resolveTenant = (req) => {
   const originHost = getHostname(req.headers.origin);
   const referer = req.headers.referer || "";
+  const isWixPreview = originHost && originHost.endsWith(".wixsite.com");
 
-  // 1) Exact custom domain
+  // Preview override via query or header (does NOT affect live domains)
+  // e.g. POST .../api/send?tenant=allSeasons  OR header: X-Tenant: allSeasons
+  if (isWixPreview) {
+    const forced = (req.query.tenant || req.headers["x-tenant"] || "")
+      .toString()
+      .toLowerCase();
+    if (forced === "allseasons" || forced === "all_seasons") return { key: "allSeasons", ...TENANTS.allSeasons };
+    if (forced === "exclusive") return { key: "exclusive", ...TENANTS.exclusive };
+  }
+
+  // 1) Live domains (Origin)
   for (const key of Object.keys(TENANTS)) {
     const t = TENANTS[key];
     if (originHost && t.hostnames.has(originHost)) return { key, ...t };
   }
-  // 2) Wix preview path cue
+
+  // 2) Preview path cue (Referer, if present)
   for (const key of Object.keys(TENANTS)) {
     const t = TENANTS[key];
-    if (t.refererIncludes.some((frag) => referer.includes(frag))) return { key, ...t };
+    if ((t.refererIncludes || []).some((frag) => referer.includes(frag))) return { key, ...t };
   }
-  // 3) Default (keeps your current behavior for previews)
+
+  // 3) Default → Exclusive
   return { key: "exclusive", ...TENANTS.exclusive };
 };
 
 /* =====
    CORS
    ===== */
-const ALWAYS_ALLOW_HOSTS = new Set([
-  "editor.wix.com",
-  "manage.wix.com",
-  "localhost",
-  "127.0.0.1",
-  "0.0.0.0",
-]);
-
+const ALWAYS_ALLOW_HOSTS = new Set(["editor.wix.com","manage.wix.com","localhost","127.0.0.1","0.0.0.0"]);
 const isAllowedOrigin = (origin) => {
-  if (!origin) return true; // Postman/curl
+  if (!origin) return true;
   const host = getHostname(origin);
   if (!host) return false;
-
-  // Allow all tenant custom domains
-  for (const key of Object.keys(TENANTS)) {
-    if (TENANTS[key].hostnames.has(host)) return true;
-  }
-  // Wix preview & assets
-  if (
-    host.endsWith(".wixsite.com") ||
-    host.endsWith(".filesusr.com") ||
-    ALWAYS_ALLOW_HOSTS.has(host)
-  ) {
-    return true;
-  }
+  for (const key of Object.keys(TENANTS)) if (TENANTS[key].hostnames.has(host)) return true;
+  if (host.endsWith(".wixsite.com") || host.endsWith(".filesusr.com") || ALWAYS_ALLOW_HOSTS.has(host)) return true;
   return false;
 };
-
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (isAllowedOrigin(origin)) return callback(null, true);
-      console.warn("❌ Blocked by CORS:", origin);
-      return callback(new Error("Not allowed by CORS"));
-    },
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
-    credentials: true,
-  })
-);
+app.use(cors({
+  origin: (origin, cb) => (isAllowedOrigin(origin) ? cb(null, true) : (console.warn("❌ Blocked by CORS:", origin), cb(new Error("Not allowed by CORS")))),
+  methods: ["GET","POST","OPTIONS"],
+  allowedHeaders: ["Content-Type","X-Tenant"],
+  credentials: true,
+}));
 
 /* ==========
    Twilio
    ========== */
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
+const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const FROM_NUMBER = process.env.TWILIO_PHONE_NUMBER;
 
 /* ==========
    Routes
    ========== */
-app.get("/", (req, res) => res.send("🚗 SMS API is live"));
+app.get("/", (_, res) => res.send("🚗 SMS API is live"));
 
+// Diagnostics (no SMS)
+app.get("/whoami", (req, res) => {
+  const t = resolveTenant(req);
+  res.json({
+    tenant: t.key,
+    brand: t.brandName,
+    origin: req.headers.origin || null,
+    referer: req.headers.referer || null,
+    note: "In Wix preview, use ?tenant=allSeasons or header X-Tenant: allSeasons to force.",
+  });
+});
+
+// Reservation → driver/admin + customer
 app.post("/api/send", async (req, res) => {
   try {
     const tenant = resolveTenant(req);
-
-    // helpful logs for testing
-    console.log("Tenant:", tenant.key, "| Origin:", req.headers.origin || "-", "| Referer:", req.headers.referer || "-");
-
     const {
-      firstName,
-      lastName,
-      phone,
-      date,
-      time,
-      passengers,
-      carSeats,
-      service,
-      notes,
+      firstName, lastName, phone, date, time,
+      passengers, carSeats, service, notes, email,
     } = req.body || {};
 
     if (!firstName || !phone || !date || !time || !service) {
@@ -215,68 +262,54 @@ app.post("/api/send", async (req, res) => {
 
     const payload = {
       brand: tenant.brandName,
-      firstName,
-      lastName,
+      firstName, lastName,
       phone: formattedPhone,
-      date,
-      time,
+      date, time,
       passengers,
       carSeats: csCount,
       csCost,
-      service,
-      notes,
+      service, notes,
     };
 
-    const driverMsg = tenant.tplDriver(payload);
-    const customerMsg = tenant.tplCustomer(payload);
+    // Deterministically choose variant so repeat sends are consistent for same booking
+    const key = `${tenant.key}|${formattedPhone}|${date}|${time}|${service}|${csCount}|${passengers || ""}`;
+    const driverTpl = stablePick(tenant.driverTpls, key);
+    const customerTpl = stablePick(tenant.customerTpls, key);
 
-    // Fan out to admins/drivers for this tenant
+    const driverMsg = driverTpl(payload);
+    const customerMsg = customerTpl(payload);
+
+    // Admin fan-out
     const adminPhones = phonesFromFirstEnv(tenant.envAdminKeys);
     if (!adminPhones.length) {
-      console.warn(
-        `⚠️ No admin phones configured for ${tenant.brandName}. Tried env keys: ${tenant.envAdminKeys.join(
-          ", "
-        )}`
-      );
+      console.warn(`⚠️ No admin phones configured for ${tenant.brandName}. Tried: ${tenant.envAdminKeys.join(", ")}`);
     } else {
       await Promise.all(
         adminPhones.map((to) =>
-          twilioClient.messages.create({
-            body: driverMsg,
-            from: FROM_NUMBER,
-            to,
-          })
+          twilioClient.messages.create({ body: driverMsg, from: FROM_NUMBER, to })
         )
       );
     }
 
     // Customer confirmation
-    await twilioClient.messages.create({
-      body: customerMsg,
-      from: FROM_NUMBER,
-      to: formattedPhone,
-    });
+    await twilioClient.messages.create({ body: customerMsg, from: FROM_NUMBER, to: formattedPhone });
 
-    res
-      .status(200)
-      .json({ success: true, message: "SMS sent to admin and client" });
+    return res.status(200).json({ success: true, message: "SMS sent to admin and client" });
   } catch (err) {
     console.error("❌ /api/send error:", err?.message || err);
-    res.status(500).json({ success: false, error: "Failed to send SMS" });
+    return res.status(500).json({ success: false, error: "Failed to send SMS" });
   }
 });
 
+// Contact → driver/admin
 app.post("/api/contact", async (req, res) => {
   try {
     const tenant = resolveTenant(req);
-    console.log("Tenant(contact):", tenant.key, "| Origin:", req.headers.origin || "-", "| Referer:", req.headers.referer || "-");
-
     const { name, phone, email, message, service } = req.body || {};
-    if (!name || !email || !message) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
+    if (!name || !email || !message) return res.status(400).json({ error: "Missing required fields" });
 
-    const contactMsg =
+    const cPayload = { brand: tenant.brandName, name, phone, email, service, message };
+    const contactMsg = tenant.contactTpl ? tenant.contactTpl(cPayload) :
 `📨 New Contact Inquiry
 Name: ${name}
 Phone: ${phone || "N/A"}
@@ -287,27 +320,19 @@ Message: ${message}
 
     const adminPhones = phonesFromFirstEnv(tenant.envAdminKeys);
     if (!adminPhones.length) {
-      console.warn(
-        `⚠️ No admin phones configured for ${tenant.brandName}. Tried env keys: ${tenant.envAdminKeys.join(
-          ", "
-        )}`
-      );
+      console.warn(`⚠️ No admin phones configured for ${tenant.brandName}. Tried: ${tenant.envAdminKeys.join(", ")}`);
     } else {
       await Promise.all(
         adminPhones.map((to) =>
-          twilioClient.messages.create({
-            body: contactMsg,
-            from: FROM_NUMBER,
-            to,
-          })
+          twilioClient.messages.create({ body: contactMsg, from: FROM_NUMBER, to })
         )
       );
     }
 
-    res.status(200).json({ success: true, message: "Contact message sent" });
+    return res.status(200).json({ success: true, message: "Contact message sent" });
   } catch (err) {
     console.error("❌ /api/contact error:", err?.message || err);
-    res.status(500).json({ success: false, error: "Failed to send contact message" });
+    return res.status(500).json({ success: false, error: "Failed to send contact message" });
   }
 });
 
@@ -315,4 +340,4 @@ Message: ${message}
    Server
    ========== */
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 SMS backend running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 SMS backend running on ${PORT}`));
