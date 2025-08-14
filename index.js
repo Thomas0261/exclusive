@@ -34,10 +34,7 @@ const stablePick = (variants, keyString) => {
 
 /* =========================
    Template Packs per tenant
-   =========================
-   NOTE: keep subtle brand differences in separators, label casing, tone and order.
-   SMS is plain text only (no HTML/CSS). We use unicode lines, bullets, spacing.
-*/
+   ========================= */
 const TENANTS = {
   exclusive: {
     brandName: "Exclusive Town Car Services",
@@ -93,7 +90,6 @@ ${p.carSeats > 0 ? `Car Seats: ${p.carSeats} ($${p.csCost})\n` : ""}We will be i
 Reply STOP to opt out.`
     ],
 
-    // CONTACT single (clean)
     contactTpl: (c) =>
 `CONTACT INQUIRY
 Name    : ${c.name}
@@ -109,7 +105,6 @@ Message : ${c.message}
     hostnames: new Set(["www.allseasontowncarservice.com","allseasontowncarservice.com"]),
     // Wix preview: https://thomast43002.wixsite.com/website-4
     refererIncludes: ["/website-4"],
-    // fallback to same list if you want one pool
     envAdminKeys: ["ADMIN_PHONES_ALLSEASONS","ADMIN_PHONES","ADMIN_PHONE"],
 
     // DRIVER variants (friendly/efficient)
@@ -136,7 +131,7 @@ Notes   : ${p.notes || "N/A"}
 ${p.brand}`
     ],
 
-    // CUSTOMER variants (warm tone with subtle emoji)
+    // CUSTOMER variants (warm tone)
     customerTpls: [
       (p) =>
 `Hi ${p.firstName}! 👋
@@ -155,7 +150,6 @@ ${p.carSeats > 0 ? `• Car Seats: ${p.carSeats} ($${p.csCost})\n` : ""}Thanks f
 Reply STOP to opt out.`
     ],
 
-    // CONTACT single (friendly)
     contactTpl: (c) =>
 `📨 New Inquiry
 Name   : ${c.name}
@@ -176,7 +170,6 @@ const resolveTenant = (req) => {
   const isWixPreview = originHost && originHost.endsWith(".wixsite.com");
 
   // Preview override via query or header (does NOT affect live domains)
-  // e.g. POST .../api/send?tenant=allSeasons  OR header: X-Tenant: allSeasons
   if (isWixPreview) {
     const forced = (req.query.tenant || req.headers["x-tenant"] || "")
       .toString()
@@ -223,13 +216,21 @@ app.use(cors({
 /* ==========
    Twilio
    ========== */
-const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-const FROM_NUMBER = process.env.TWILIO_PHONE_NUMBER;
+const FROM_NUMBER = (process.env.TWILIO_PHONE_NUMBER || "").trim();
+if (!FROM_NUMBER) {
+  console.warn("⚠️ TWILIO_PHONE_NUMBER is not set. Sends will fail.");
+}
+const twilioClient = twilio(
+  (process.env.TWILIO_ACCOUNT_SID || "").trim(),
+  (process.env.TWILIO_AUTH_TOKEN || "").trim()
+);
 
 /* ==========
    Routes
    ========== */
 app.get("/", (_, res) => res.send("🚗 SMS API is live"));
+// quick k8s-style probe
+app.get("/healthz", (_, res) => res.json({ ok: true }));
 
 // Diagnostics (no SMS)
 app.get("/whoami", (req, res) => {
@@ -249,11 +250,14 @@ app.post("/api/send", async (req, res) => {
     const tenant = resolveTenant(req);
     const {
       firstName, lastName, phone, date, time,
-      passengers, carSeats, service, notes, email,
+      passengers, carSeats, service, notes,
     } = req.body || {};
 
     if (!firstName || !phone || !date || !time || !service) {
       return res.status(400).json({ error: "Missing required fields" });
+    }
+    if (!FROM_NUMBER) {
+      return res.status(500).json({ error: "Missing TWILIO_PHONE_NUMBER" });
     }
 
     const formattedPhone = formatUSPhone(phone);
@@ -271,33 +275,60 @@ app.post("/api/send", async (req, res) => {
       service, notes,
     };
 
-    // Deterministically choose variant so repeat sends are consistent for same booking
+    // Choose variant deterministically
     const key = `${tenant.key}|${formattedPhone}|${date}|${time}|${service}|${csCount}|${passengers || ""}`;
     const driverTpl = stablePick(tenant.driverTpls, key);
     const customerTpl = stablePick(tenant.customerTpls, key);
 
+    if (!driverTpl || !customerTpl) {
+      console.error("❌ Template selection failed");
+      return res.status(500).json({ error: "Template selection failed" });
+    }
+
     const driverMsg = driverTpl(payload);
     const customerMsg = customerTpl(payload);
 
-    // Admin fan-out
+    // Admin fan-out (fault-tolerant)
     const adminPhones = phonesFromFirstEnv(tenant.envAdminKeys);
+    let adminResults = [];
     if (!adminPhones.length) {
       console.warn(`⚠️ No admin phones configured for ${tenant.brandName}. Tried: ${tenant.envAdminKeys.join(", ")}`);
     } else {
-      await Promise.all(
-        adminPhones.map((to) =>
-          twilioClient.messages.create({ body: driverMsg, from: FROM_NUMBER, to })
-        )
+      adminResults = await Promise.allSettled(
+        adminPhones.map((to) => twilioClient.messages.create({ body: driverMsg, from: FROM_NUMBER, to }))
       );
     }
 
     // Customer confirmation
-    await twilioClient.messages.create({ body: customerMsg, from: FROM_NUMBER, to: formattedPhone });
+    let customerResult;
+    try {
+      customerResult = await twilioClient.messages.create({ body: customerMsg, from: FROM_NUMBER, to: formattedPhone });
+    } catch (err) {
+      console.error("❌ Customer SMS failed:", err?.message || err, err?.code || "", err?.moreInfo || "");
+      return res.status(500).json({
+        success: false,
+        error: "Failed to send customer SMS",
+        detail: err?.message || null,
+        code: err?.code || null,
+      });
+    }
 
-    return res.status(200).json({ success: true, message: "SMS sent to admin and client" });
+    // If some admin sends failed, surface that but still return 200 (since customer got confirmation)
+    const failedAdmins = adminResults.filter(r => r.status === "rejected");
+    if (failedAdmins.length) {
+      console.warn(`⚠️ Some admin sends failed: ${failedAdmins.length}`);
+      return res.status(200).json({
+        success: true,
+        message: "Customer SMS sent; some admin sends failed",
+        adminErrors: failedAdmins.map(f => f.reason?.message || String(f.reason)),
+        sid: customerResult.sid || null,
+      });
+    }
+
+    return res.status(200).json({ success: true, message: "SMS sent to admin and client", sid: customerResult.sid || null });
   } catch (err) {
-    console.error("❌ /api/send error:", err?.message || err);
-    return res.status(500).json({ success: false, error: "Failed to send SMS" });
+    console.error("❌ /api/send error:", err?.message || err, err?.code || "", err?.moreInfo || "");
+    return res.status(500).json({ success: false, error: "Failed to send SMS", detail: err?.message || null, code: err?.code || null });
   }
 });
 
@@ -307,6 +338,7 @@ app.post("/api/contact", async (req, res) => {
     const tenant = resolveTenant(req);
     const { name, phone, email, message, service } = req.body || {};
     if (!name || !email || !message) return res.status(400).json({ error: "Missing required fields" });
+    if (!FROM_NUMBER) return res.status(500).json({ error: "Missing TWILIO_PHONE_NUMBER" });
 
     const cPayload = { brand: tenant.brandName, name, phone, email, service, message };
     const contactMsg = tenant.contactTpl ? tenant.contactTpl(cPayload) :
@@ -322,17 +354,24 @@ Message: ${message}
     if (!adminPhones.length) {
       console.warn(`⚠️ No admin phones configured for ${tenant.brandName}. Tried: ${tenant.envAdminKeys.join(", ")}`);
     } else {
-      await Promise.all(
-        adminPhones.map((to) =>
-          twilioClient.messages.create({ body: contactMsg, from: FROM_NUMBER, to })
-        )
+      const results = await Promise.allSettled(
+        adminPhones.map((to) => twilioClient.messages.create({ body: contactMsg, from: FROM_NUMBER, to }))
       );
+      const failed = results.filter(r => r.status === "rejected");
+      if (failed.length) {
+        console.warn(`⚠️ Some contact admin sends failed: ${failed.length}`);
+        return res.status(200).json({
+          success: true,
+          message: "Contact delivered to some admins; some failed",
+          adminErrors: failed.map(f => f.reason?.message || String(f.reason)),
+        });
+      }
     }
 
     return res.status(200).json({ success: true, message: "Contact message sent" });
   } catch (err) {
-    console.error("❌ /api/contact error:", err?.message || err);
-    return res.status(500).json({ success: false, error: "Failed to send contact message" });
+    console.error("❌ /api/contact error:", err?.message || err, err?.code || "", err?.moreInfo || "");
+    return res.status(500).json({ success: false, error: "Failed to send contact message", detail: err?.message || null, code: err?.code || null });
   }
 });
 
@@ -340,4 +379,4 @@ Message: ${message}
    Server
    ========== */
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 SMS backend running on ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 SMS backend running on port ${PORT}`));
